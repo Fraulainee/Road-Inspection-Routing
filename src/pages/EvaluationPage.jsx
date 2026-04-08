@@ -111,8 +111,8 @@ export default function EvaluationPage() {
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [mode, setMode] = useState("annotate"); // annotate | measure | idle
-  const [measureTarget, setMeasureTarget] = useState("length"); // length | width
+  const [mode, setMode] = useState("idle"); // annotate | measure | idle
+  const measureTarget = "length";
   const [dotSize, setDotSize] = useState(4);
   const dotBorder = Math.max(1, Math.round(dotSize * 0.25));
 
@@ -146,31 +146,29 @@ export default function EvaluationPage() {
   const panDragRef = useRef(null); // { mouseX, mouseY, panX, panY } while panning
   const draggedRef = useRef(false); // true if mouse moved enough to count as a drag
 
+  // Zoom toward a canvas-relative point (cx, cy)
+  function zoomToward(cx, cy, factor) {
+    setZoom((prevZoom) => {
+      const newZoom = Math.min(100, Math.max(0.5, prevZoom * factor));
+      setPan((p) => ({
+        x: cx + (p.x - cx) * (newZoom / prevZoom),
+        y: cy + (p.y - cy) * (newZoom / prevZoom),
+      }));
+      return newZoom;
+    });
+  }
+
   // Wheel zoom — non-passive so we can preventDefault
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
     const handleWheel = (e) => {
       e.preventDefault();
-      const canvasRect = el.getBoundingClientRect();
-      const imgRect = imgRef.current?.getBoundingClientRect();
-      const cx = e.clientX - canvasRect.left;
-      const cy = e.clientY - canvasRect.top;
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
       const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      setZoom((prevZoom) => {
-        const newZoom = Math.min(100, Math.max(0.5, prevZoom * factor));
-        setPan((p) => {
-          // Natural (layout) offset of the image inside the canvas before any pan.
-          // imgRect already reflects the current transform, so subtract pan to get the base offset.
-          const nx = imgRect ? imgRect.left - canvasRect.left - p.x : 0;
-          const ny = imgRect ? imgRect.top  - canvasRect.top  - p.y : 0;
-          return {
-            x: (cx - nx) - (cx - nx - p.x) * (newZoom / prevZoom),
-            y: (cy - ny) - (cy - ny - p.y) * (newZoom / prevZoom),
-          };
-        });
-        return newZoom;
-      });
+      zoomToward(cx, cy, factor);
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
@@ -457,14 +455,14 @@ export default function EvaluationPage() {
 
   function onMouseDown(e) {
     if (e.button !== 0) return;
+    e.preventDefault(); // always stop native browser image drag
     draggedRef.current = false;
     if (mode === "annotate") {
-      e.preventDefault();
       const p = getImagePixelFromClick(e);
       if (!p) return;
       setDrawingBox({ x1: p.x, y1: p.y, x2: p.x, y2: p.y });
     } else {
-      // Pan by default in measure and idle modes
+      // Hold to pan in measure and idle modes
       panDragRef.current = { mouseX: e.clientX, mouseY: e.clientY, panX: pan.x, panY: pan.y };
     }
   }
@@ -585,13 +583,21 @@ export default function EvaluationPage() {
               <div className="eval-zoom">
                 <button
                   className="icon-btn"
-                  onClick={() => setZoom((z) => Math.min(100, +(z + 0.2).toFixed(2)))}
+                  onClick={() => {
+                    const el = canvasRef.current;
+                    const r = el?.getBoundingClientRect();
+                    zoomToward(r ? r.width / 2 : 0, r ? r.height / 2 : 0, 1.25);
+                  }}
                 >
                   <ZoomIn size={18} />
                 </button>
                 <button
                   className="icon-btn"
-                  onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.2).toFixed(2)))}
+                  onClick={() => {
+                    const el = canvasRef.current;
+                    const r = el?.getBoundingClientRect();
+                    zoomToward(r ? r.width / 2 : 0, r ? r.height / 2 : 0, 1 / 1.25);
+                  }}
                 >
                   <ZoomOut size={18} />
                 </button>
@@ -617,7 +623,17 @@ export default function EvaluationPage() {
                     draggable={false}
                     onLoad={(e) => {
                       const im = e.currentTarget;
-                      setImgSize({ w: im.naturalWidth || 0, h: im.naturalHeight || 0 });
+                      const w = im.naturalWidth || 0;
+                      const h = im.naturalHeight || 0;
+                      setImgSize({ w, h });
+                      // Center image in canvas via initial pan
+                      const canvas = canvasRef.current;
+                      if (canvas) {
+                        setPan({
+                          x: Math.max(0, (canvas.clientWidth - w) / 2),
+                          y: Math.max(0, (canvas.clientHeight - h) / 2),
+                        });
+                      }
                     }}
                   />
 
@@ -746,20 +762,6 @@ export default function EvaluationPage() {
                     Measure
                   </button>
                   <button
-                    className={measureTarget === "length" ? "tool-btn active" : "tool-btn ghost"}
-                    onClick={() => setMeasureTarget("length")}
-                    title="Measure Length"
-                  >
-                    Length
-                  </button>
-                  <button
-                    className={measureTarget === "width" ? "tool-btn active" : "tool-btn ghost"}
-                    onClick={() => setMeasureTarget("width")}
-                    title="Measure Width"
-                  >
-                    Width
-                  </button>
-                  <button
                     className="tool-btn ghost"
                     onClick={undoMeasure}
                     disabled={measurePts.length === 0}
@@ -807,9 +809,6 @@ export default function EvaluationPage() {
                     />
                   </div>
                   <div className="meter-totals" style={{ alignItems: "flex-start", marginTop: 0 }}>
-                    <div className="eval-total-label eval-total-big">
-                      Total: {totalPx.toFixed(1)} px
-                    </div>
                     <div className="eval-total-label eval-total-big eval-total-highlight">
                       Total: {Number.isFinite(totalM) ? totalM.toFixed(3) : "—"} m
                     </div>

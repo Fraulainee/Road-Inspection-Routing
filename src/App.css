@@ -1676,11 +1676,10 @@ body {
 .eval-canvas{
   position: relative;
   min-height: 380px;
-  display:grid;
-  place-items:center;
-  overflow:auto;
-
+  overflow: hidden;
   background: #000;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .eval-img{
@@ -2313,6 +2312,9 @@ body {
   display: inline-block;
   transform-origin: 0 0;
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 .eval-img {
