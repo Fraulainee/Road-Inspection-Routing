@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ZoomIn, ZoomOut, Save, X, Pencil, Ruler, Undo2, Trash2, Hand } from "lucide-react";
+import { ZoomIn, ZoomOut, Save, X, Pencil, Ruler, Undo2, Trash2 } from "lucide-react";
 
 // Items grouped by pavement type — names must match the remarks_lookup table exactly
 const PAVEMENT_ITEMS = {
@@ -60,6 +60,7 @@ const ITEM_SEVERITY = {
   "Gravel Quality":                       ["1", "2", "3", "4"],
   "Crown Shape":                          ["1", "2", "3", "4"],
   "Roadside Drainage":                    ["1", "2", "3", "4"],
+  "Others":                               ["Slight", "Moderate", "Severe"],
 };
 
 function clamp(n, a, b) {
@@ -94,6 +95,11 @@ export default function EvaluationPage() {
   const filename = state?.filename || "evaluation";
   const partitionFolder = state?.partitionFolder || "";
   const partitionId = state?.partitionId || null;
+  const partitionNo = state?.partitionNo ?? "";
+  const subsegmentId = state?.subsegmentId ?? "";
+  const segmentId = state?.segmentId ?? "";
+  const chainageId = state?.chainageId ?? "";
+  const projectId = state?.projectId ?? "";
 
   function goBack() {
     // Return to ReviewPage preserving the image index the user was on
@@ -107,6 +113,8 @@ export default function EvaluationPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [mode, setMode] = useState("annotate"); // annotate | measure | idle
   const [measureTarget, setMeasureTarget] = useState("length"); // length | width
+  const [dotSize, setDotSize] = useState(4);
+  const dotBorder = Math.max(1, Math.round(dotSize * 0.25));
 
   const [form, setForm] = useState({
     pavement_type: state?.pavementType || "",
@@ -119,7 +127,8 @@ export default function EvaluationPage() {
     severity: "",
     joint: "",
     remarks: "",
-    meterPerPx: "0.0008",
+    meterPerPx: "0.008862",
+    itemOther: "",
   });
 
   // Multi-point measurement state (image px coords)
@@ -135,6 +144,7 @@ export default function EvaluationPage() {
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
   const panDragRef = useRef(null); // { mouseX, mouseY, panX, panY } while panning
+  const draggedRef = useRef(false); // true if mouse moved enough to count as a drag
 
   // Wheel zoom — non-passive so we can preventDefault
   useEffect(() => {
@@ -142,16 +152,23 @@ export default function EvaluationPage() {
     if (!el) return;
     const handleWheel = (e) => {
       e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
+      const canvasRect = el.getBoundingClientRect();
+      const imgRect = imgRef.current?.getBoundingClientRect();
+      const cx = e.clientX - canvasRect.left;
+      const cy = e.clientY - canvasRect.top;
       const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
       setZoom((prevZoom) => {
-        const newZoom = Math.min(8, Math.max(0.5, prevZoom * factor));
-        setPan((p) => ({
-          x: cx - (cx - p.x) * (newZoom / prevZoom),
-          y: cy - (cy - p.y) * (newZoom / prevZoom),
-        }));
+        const newZoom = Math.min(100, Math.max(0.5, prevZoom * factor));
+        setPan((p) => {
+          // Natural (layout) offset of the image inside the canvas before any pan.
+          // imgRect already reflects the current transform, so subtract pan to get the base offset.
+          const nx = imgRect ? imgRect.left - canvasRect.left - p.x : 0;
+          const ny = imgRect ? imgRect.top  - canvasRect.top  - p.y : 0;
+          return {
+            x: (cx - nx) - (cx - nx - p.x) * (newZoom / prevZoom),
+            y: (cy - ny) - (cy - ny - p.y) * (newZoom / prevZoom),
+          };
+        });
         return newZoom;
       });
     };
@@ -165,6 +182,7 @@ export default function EvaluationPage() {
       if (!panDragRef.current) return;
       const dx = e.clientX - panDragRef.current.mouseX;
       const dy = e.clientY - panDragRef.current.mouseY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) draggedRef.current = true;
       setPan({ x: panDragRef.current.panX + dx, y: panDragRef.current.panY + dy });
     };
     const handleUp = () => { panDragRef.current = null; };
@@ -181,8 +199,8 @@ export default function EvaluationPage() {
   function setField(k, v) {
     setForm((p) => {
       const updated = { ...p, [k]: v };
-      if (k === "pavement_type") { updated.item = ""; updated.severity = ""; }
-      if (k === "item")          { updated.severity = ""; }
+      if (k === "pavement_type") { updated.item = ""; updated.severity = ""; updated.itemOther = ""; }
+      if (k === "item")          { updated.severity = ""; if (v !== "Others") updated.itemOther = ""; }
       if (k === "length" || k === "width") {
         const l = parseFloat(k === "length" ? v : p.length);
         const w = parseFloat(k === "width" ? v : p.width);
@@ -200,77 +218,162 @@ export default function EvaluationPage() {
       return;
     }
 
-    // Create canvas screenshot
-    const canvas = document.createElement("canvas");
-    canvas.width = imgSize.w;
-    canvas.height = imgSize.h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      alert("Canvas not supported.");
-      return;
+    const resolvedItem = form.item === "Others" ? (form.itemOther || "Others") : form.item;
+
+    // --- Resolve metadata names via API ---
+    const clean = (s) => String(s || "").replace(/[/\\:*?"<>|]/g, "-").replace(/\s+/g, "_");
+
+    let projectName  = projectId  ? `Project${projectId}`  : "Project";
+    let chainageName = chainageId ? `C${chainageId}`        : "Chainage";
+    let segmentName  = segmentId  ? `S${segmentId}`         : "Segment";
+    let subsegName   = subsegmentId ? `SS${subsegmentId}`   : "Subsegment";
+
+    if (isElectron()) {
+      try {
+        const projects = await window.api.listProjects();
+        const proj = projects?.find((p) => String(p.id) === String(projectId));
+        // real field is road_name; fall back to name for web mock
+        if (proj) projectName = proj.road_name || proj.name || projectName;
+      } catch { /* ignore */ }
+
+      try {
+        const chainages = await window.api.listChainages(Number(projectId));
+        const ch = chainages?.find((c) => String(c.id) === String(chainageId));
+        if (ch?.name) chainageName = ch.name;
+      } catch { /* ignore */ }
+
+      try {
+        const segments = await window.api.listSegments(Number(chainageId));
+        const seg = segments?.find((s) => String(s.id) === String(segmentId));
+        // segmentStart is the primary label (e.g. "K1512 + (000)")
+        if (seg) segmentName = seg.segmentStart || seg.name || `S${segmentId}`;
+      } catch { /* ignore */ }
+
+      try {
+        const subs = await window.api.listSubsegments(Number(segmentId));
+        const sub = subs?.find((s) => String(s.id) === String(subsegmentId));
+        // subsegment_no is the human-readable number
+        if (sub) subsegName = `SS${sub.subsegment_no ?? subsegmentId}`;
+      } catch { /* ignore */ }
     }
 
-    // Draw base image
-    ctx.drawImage(img, 0, 0, imgSize.w, imgSize.h);
+    // partition_no comes directly from navigation state (set in PartitionPage)
+    const parLabel = partitionNo !== "" ? `Part${partitionNo}` : `Part${partitionId || "?"}`;
 
-    // Draw bounding boxes
+    // --- Build filename ---
+    const outName = [
+      clean(projectName),
+      clean(chainageName),
+      clean(segmentName),
+      clean(subsegName),
+      clean(parLabel),
+      clean(form.pavement_type),
+      clean(resolvedItem),
+      form.length || "0",
+      form.width  || "0",
+    ].join("_") + ".png";
+
+    // --- Build canvas with header + image + footer ---
+    const headerH = Math.round(imgSize.h * 0.055);
+    const footerH = Math.round(imgSize.h * 0.075);
+
+    const canvas = document.createElement("canvas");
+    canvas.width  = imgSize.w;
+    canvas.height = headerH + imgSize.h + footerH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { alert("Canvas not supported."); return; }
+
+    // Header background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, imgSize.w, headerH);
+
+    // Header text
+    const hFont = Math.max(12, Math.round(headerH * 0.38));
+    ctx.font = `bold ${hFont}px Arial`;
+    ctx.fillStyle = "#111111";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const headerText = `${projectName}  |  ${chainageName}  |  ${segmentName}  |  ${subsegName}  |  ${parLabel}  |  ${form.pavement_type || "—"}  |  ${resolvedItem || "—"}  |  L: ${form.length || "—"} m  |  W: ${form.width || "—"} m`;
+    ctx.fillText(headerText, Math.round(imgSize.w * 0.01), headerH / 2);
+
+    // Base image
+    ctx.drawImage(img, 0, headerH, imgSize.w, imgSize.h);
+
+    // Bounding boxes (offset y by headerH)
     ctx.setLineDash([]);
     ctx.lineWidth = 6;
     for (const box of boxes) {
       const x = Math.min(box.x1, box.x2);
-      const y = Math.min(box.y1, box.y2);
+      const y = Math.min(box.y1, box.y2) + headerH;
       const w = Math.abs(box.x2 - box.x1);
       const h = Math.abs(box.y2 - box.y1);
       ctx.strokeStyle = "rgba(220, 38, 38, 1)";
       ctx.strokeRect(x, y, w, h);
     }
 
-    // Draw polyline (measurement line)
+    // Polyline (offset y by headerH)
     if (measurePts.length >= 2) {
       ctx.lineWidth = 6;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.strokeStyle = "rgba(252,163,17,0.95)";
       ctx.beginPath();
-      ctx.moveTo(measurePts[0].x, measurePts[0].y);
+      ctx.moveTo(measurePts[0].x, measurePts[0].y + headerH);
       for (let i = 1; i < measurePts.length; i++) {
-        ctx.lineTo(measurePts[i].x, measurePts[i].y);
+        ctx.lineTo(measurePts[i].x, measurePts[i].y + headerH);
       }
       ctx.stroke();
     }
 
-    // Draw points
+    // Dots (offset y by headerH)
     for (const p of measurePts) {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y + headerH, dotSize, 0, Math.PI * 2);
       ctx.fillStyle = "#ffffff";
       ctx.fill();
-      ctx.lineWidth = 3;
+      ctx.lineWidth = dotBorder;
       ctx.strokeStyle = "rgba(252,163,17,0.95)";
       ctx.stroke();
     }
 
-    // Draw info box in bottom-left corner
-    const boxX = 10;
-    const boxY = imgSize.h - 80;
-    const boxW = 300;
-    const boxH = 65;
-
-    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    ctx.fillRect(boxX, boxY, boxW, boxH);
-
-    // Text styling
-    ctx.font = "bold 22px Arial";
+    // Footer background
+    const footerY = headerH + imgSize.h;
     ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "left";
+    ctx.fillRect(0, footerY, imgSize.w, footerH);
 
-    // Length
-    const lengthText = `Length (m): ${form.length || "—"}`;
-    ctx.fillText(lengthText, boxX + 15, boxY + 25);
+    // Footer 3-column data
+    const colW = imgSize.w / 3;
+    const fLabelFont = Math.max(11, Math.round(footerH * 0.28));
+    const fValueFont = Math.max(13, Math.round(footerH * 0.40));
+    const labelY = footerY + footerH * 0.3;
+    const valueY = footerY + footerH * 0.72;
 
-    // Width
-    const widthText = `Width (m): ${form.width || "—"}`;
-    ctx.fillText(widthText, boxX + 15, boxY + 50);
+    const footerCols = [
+      { label: "Length (m)", value: form.length || "—" },
+      { label: "Width (m)",  value: form.width  || "—" },
+      { label: "Area (m²)",  value: form.area !== "N/A" ? form.area : "—" },
+    ];
+
+    footerCols.forEach(({ label, value }, i) => {
+      const cx = colW * i + colW / 2;
+      // divider line between columns
+      if (i > 0) {
+        ctx.strokeStyle = "rgba(0,0,0,0.15)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(colW * i, footerY + footerH * 0.15);
+        ctx.lineTo(colW * i, footerY + footerH * 0.85);
+        ctx.stroke();
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `${fLabelFont}px Arial`;
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillText(label, cx, labelY);
+      ctx.font = `bold ${fValueFont}px Arial`;
+      ctx.fillStyle = "#d97706";
+      ctx.fillText(value, cx, valueY);
+    });
 
     // Export PNG
     canvas.toBlob(async (blob) => {
@@ -279,16 +382,12 @@ export default function EvaluationPage() {
         return;
       }
 
-      const ts = new Date().toISOString().replace(/[:.]/g, "-");
-      const outName = `${filename}_eval_${ts}.png`;
-
       // Electron: Save screenshot + insert DB record
       if (isElectron()) {
         try {
-          // Save screenshot into item subfolder inside partition folder
           let screenshotPath = null;
           if (partitionFolder && window.api?.saveImageBytes) {
-            const itemName = (form.item || "Uncategorized").replace(/[/\\:*?"<>|]/g, "-");
+            const itemName = (resolvedItem || "Uncategorized").replace(/[/\\:*?"<>|]/g, "-");
             const saveFolder = `${partitionFolder}/${itemName}`;
             const arrayBuffer = await blob.arrayBuffer();
             screenshotPath = await window.api.saveImageBytes(
@@ -298,14 +397,13 @@ export default function EvaluationPage() {
             );
           }
 
-          // Insert defect record
           await window.api.createDefect({
             partition_id: partitionId,
             image_filename: filename,
             pavement_type: form.pavement_type,
             lane_no: form.laneNo ? Number(form.laneNo) : null,
             joint: form.joint || null,
-            item: form.item || null,
+            item: resolvedItem || null,
             length_m: form.length ? Number(form.length) : null,
             width_m: form.width ? Number(form.width) : null,
             depth_mm: form.depth && form.depth !== "N/A" ? Number(form.depth) : null,
@@ -358,12 +456,15 @@ export default function EvaluationPage() {
   }
 
   function onMouseDown(e) {
+    if (e.button !== 0) return;
+    draggedRef.current = false;
     if (mode === "annotate") {
       e.preventDefault();
       const p = getImagePixelFromClick(e);
       if (!p) return;
       setDrawingBox({ x1: p.x, y1: p.y, x2: p.x, y2: p.y });
-    } else if (mode === "idle" && e.button === 0) {
+    } else {
+      // Pan by default in measure and idle modes
       panDragRef.current = { mouseX: e.clientX, mouseY: e.clientY, panX: pan.x, panY: pan.y };
     }
   }
@@ -404,6 +505,7 @@ export default function EvaluationPage() {
 
   function onImageClick(e) {
     if (mode !== "measure") return;
+    if (draggedRef.current) return; // was a drag-to-pan, not a point click
     const p = getImagePixelFromClick(e);
     if (!p) return;
     setMeasurePts((prev) => [...prev, p]);
@@ -483,26 +585,27 @@ export default function EvaluationPage() {
               <div className="eval-zoom">
                 <button
                   className="icon-btn"
-                  onClick={() => setZoom((z) => Math.min(3, +(z + 0.2).toFixed(2)))}
+                  onClick={() => setZoom((z) => Math.min(100, +(z + 0.2).toFixed(2)))}
                 >
                   <ZoomIn size={18} />
                 </button>
                 <button
                   className="icon-btn"
-                  onClick={() => setZoom((z) => Math.max(1, +(z - 0.2).toFixed(2)))}
+                  onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.2).toFixed(2)))}
                 >
                   <ZoomOut size={18} />
                 </button>
               </div>
             </div>
 
-            <div ref={canvasRef} className={`eval-canvas ${mode === "measure" ? "measure-mode" : mode === "annotate" ? "annotate-mode" : mode === "idle" ? "idle-mode" : ""}`}>
+            <div ref={canvasRef} className={`eval-canvas ${mode === "measure" ? "measure-mode" : mode === "annotate" ? "annotate-mode" : mode === "idle" ? "idle-mode" : ""}`}
+              onClick={onImageClick}
+              onMouseDown={onMouseDown}
+              onMouseMove={onMouseMove}
+              onMouseUp={onMouseUp}
+            >
               {viewUrl ? (
                 <div
-                  onClick={onImageClick}
-                  onMouseDown={onMouseDown}
-                  onMouseMove={onMouseMove}
-                  onMouseUp={onMouseUp}
                   className="eval-image-wrapper"
                   style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: "0 0" }}
                 >
@@ -533,7 +636,7 @@ export default function EvaluationPage() {
                         height={Math.abs(box.y2 - box.y1)}
                         fill="none"
                         stroke="rgba(220,38,38,1)"
-                        strokeWidth="6"
+                        strokeWidth={6 / zoom}
                       />
                     ))}
 
@@ -546,7 +649,7 @@ export default function EvaluationPage() {
                         height={Math.abs(drawingBox.y2 - drawingBox.y1)}
                         fill="none"
                         stroke="rgba(220,38,38,0.7)"
-                        strokeWidth="6"
+                        strokeWidth={6 / zoom}
                       />
                     )}
 
@@ -555,7 +658,7 @@ export default function EvaluationPage() {
                         points={measurePts.map((p) => `${p.x},${p.y}`).join(" ")}
                         fill="none"
                         stroke="rgba(252,163,17,0.95)"
-                        strokeWidth="6"
+                        strokeWidth={6 / zoom}
                         strokeLinejoin="round"
                         strokeLinecap="round"
                       />
@@ -566,10 +669,10 @@ export default function EvaluationPage() {
                         key={idx}
                         cx={p.x}
                         cy={p.y}
-                        r="4"
+                        r={dotSize / zoom}
                         fill="white"
                         stroke="rgba(252,163,17,0.95)"
-                        strokeWidth="3"
+                        strokeWidth={dotBorder / zoom}
                       />
                     ))}
                   </svg>
@@ -599,28 +702,13 @@ export default function EvaluationPage() {
 
             <div className="eval-tools">
 
-              {/* Pan */}
-              <div className="tool-card">
-                <span className="tool-card-label">Mode</span>
-                <div className="tool-card-btns">
-                  <button
-                    className={mode === "idle" ? "tool-btn tool-btn-pan active" : "tool-btn tool-btn-pan"}
-                    onClick={() => setMode("idle")}
-                    title="Drag to pan the image"
-                  >
-                    <Hand size={16} />
-                    Pan
-                  </button>
-                </div>
-              </div>
-
               {/* Annotate */}
               <div className="tool-card">
                 <span className="tool-card-label">Annotate</span>
                 <div className="tool-card-btns">
                   <button
                     className={mode === "annotate" ? "tool-btn active" : "tool-btn"}
-                    onClick={() => { setMode("annotate"); resetMeasure(); }}
+                    onClick={() => { setMode((m) => m === "annotate" ? "idle" : "annotate"); resetMeasure(); }}
                   >
                     <Pencil size={16} />
                     Draw Box
@@ -652,7 +740,7 @@ export default function EvaluationPage() {
                 <div className="tool-card-btns">
                   <button
                     className={mode === "measure" ? "tool-btn active" : "tool-btn"}
-                    onClick={() => setMode("measure")}
+                    onClick={() => setMode((m) => m === "measure" ? "idle" : "measure")}
                   >
                     <Ruler size={16} />
                     Measure
@@ -689,6 +777,17 @@ export default function EvaluationPage() {
                     <Trash2 size={16} />
                     Clear
                   </button>
+                  <div className="meter-row" style={{ marginTop: 4 }}>
+                    <label>Dot size: {dotSize}px</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      value={dotSize}
+                      onChange={(e) => setDotSize(Number(e.target.value))}
+                      style={{ width: 90 }}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -771,6 +870,14 @@ export default function EvaluationPage() {
                     <option key={x} value={x}>{x}</option>
                   ))}
                 </select>
+                {form.item === "Others" && (
+                  <input
+                    style={{ marginTop: 6 }}
+                    value={form.itemOther}
+                    onChange={(e) => setField("itemOther", e.target.value)}
+                    placeholder="Specify item type..."
+                  />
+                )}
               </div>
 
               <div className="frow">

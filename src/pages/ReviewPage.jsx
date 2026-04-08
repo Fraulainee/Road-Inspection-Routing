@@ -11,6 +11,11 @@ export default function ReviewPage() {
   const pavementType = state?.pavementType || "";
   const partitionId = state?.partitionId || null;
   const partitionFolder = state?.partitionFolder || "";
+  const partitionNo = state?.partitionNo ?? "";
+  const subsegmentId = state?.subsegmentId ?? "";
+  const segmentId = state?.segmentId ?? "";
+  const chainageId = state?.chainageId ?? "";
+  const projectId = state?.projectId ?? "";
 
   const [images, setImages] = useState([]);
   const [aiImages, setAiImages] = useState([]);
@@ -76,12 +81,12 @@ export default function ReviewPage() {
 
       <div className="content review-wrap">
         <div className="review-panels">
-          {/* LEFT: original image folder */}
+          {/* LEFT: AI output folder */}
           <div className="review-panel">
             <div className="review-panel-label">
-              Image Folder
+              AI Folder
               <span className="review-panel-sub">
-                {imageFolder ? imageFolder.split(/[\\/]/).pop() : "none"} · {images.length} img{images.length !== 1 ? "s" : ""}
+                {aiFolder ? aiFolder.split(/[\\/]/).pop() : "none"} · {aiImages.length} img{aiImages.length !== 1 ? "s" : ""}
               </span>
             </div>
             <div className="review-topbar">
@@ -96,25 +101,25 @@ export default function ReviewPage() {
             </div>
 
             <div className="review-canvas">
-              {originalUrl ? (
+              {aiUrl ? (
                 <img
-                  src={originalUrl}
-                  alt="Original"
+                  src={aiUrl}
+                  alt="AI Output"
                   style={{ transform: `scale(${zoomLeft})` }}
                   className="review-img"
                 />
               ) : (
-                <div className="review-empty">No image</div>
+                <div className="review-empty">No AI image</div>
               )}
             </div>
           </div>
 
-          {/* RIGHT: AI output folder */}
+          {/* RIGHT: raw image folder */}
           <div className="review-panel">
             <div className="review-panel-label">
-              AI Folder
+              Image Folder
               <span className="review-panel-sub">
-                {aiFolder ? aiFolder.split(/[\\/]/).pop() : "none"} · {aiImages.length} img{aiImages.length !== 1 ? "s" : ""}
+                {imageFolder ? imageFolder.split(/[\\/]/).pop() : "none"} · {images.length} img{images.length !== 1 ? "s" : ""}
               </span>
             </div>
             <div className="review-topbar">
@@ -129,15 +134,15 @@ export default function ReviewPage() {
             </div>
 
             <div className="review-canvas">
-              {aiUrl ? (
+              {originalUrl ? (
                 <img
-                  src={aiUrl}
-                  alt="AI Output"
+                  src={originalUrl}
+                  alt="Original"
                   style={{ transform: `scale(${zoomRight})` }}
                   className="review-img"
                 />
               ) : (
-                <div className="review-empty">No AI image</div>
+                <div className="review-empty">No image</div>
               )}
             </div>
           </div>
@@ -177,6 +182,11 @@ export default function ReviewPage() {
                     partitionFolder,
                     pavementType,
                     partitionId,
+                    partitionNo,
+                    subsegmentId,
+                    segmentId,
+                    chainageId,
+                    projectId,
                 },
                 })
             }

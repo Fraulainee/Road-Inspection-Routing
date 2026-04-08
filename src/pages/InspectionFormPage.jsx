@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, RefreshCcw, Search, X, ChevronDown, ChevronRight, Download } from "lucide-react";
+import { ArrowLeft, RefreshCcw, X, ChevronDown, ChevronRight, Download } from "lucide-react";
 
 function isElectron() {
   return typeof window !== "undefined" && !!window.api;
@@ -64,19 +64,21 @@ export default function InspectionFormPage() {
   const [segments, setSegments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterPavement, setFilterPavement] = useState("");
-  const [filterItem, setFilterItem] = useState("");
-  const [filterSeverity, setFilterSeverity] = useState("");
+  const [filterSegment,    setFilterSegment]    = useState("");
+  const [filterSubsegment, setFilterSubsegment] = useState("");
+  const [filterPartition,  setFilterPartition]  = useState("");
+  const [filterLaneNo,     setFilterLaneNo]     = useState("");
+  const [filterJoint,      setFilterJoint]      = useState("");
+  const [filterItem,       setFilterItem]       = useState("");
+  const [filterSeverity,   setFilterSeverity]   = useState("");
   const [expandedPartitions, setExpandedPartitions] = useState(new Set());
 
-  const hasAnyFilter = searchTerm.trim() || filterPavement || filterItem || filterSeverity;
+  const hasAnyFilter = filterSegment || filterSubsegment ||
+    filterPartition || filterLaneNo || filterJoint || filterItem || filterSeverity;
 
   function clearAllFilters() {
-    setSearchTerm("");
-    setFilterPavement("");
-    setFilterItem("");
-    setFilterSeverity("");
+    setFilterSegment(""); setFilterSubsegment(""); setFilterPartition("");
+    setFilterLaneNo(""); setFilterJoint(""); setFilterItem(""); setFilterSeverity("");
   }
 
   function downloadCSV() {
@@ -129,33 +131,6 @@ export default function InspectionFormPage() {
     URL.revokeObjectURL(url);
   }
 
-  // Derive dropdown options from loaded data
-  const pavementOptions = useMemo(() => {
-    const s = new Set();
-    segments.forEach(seg => seg.subsegments?.forEach(sub => { if (sub.pavement_type) s.add(sub.pavement_type); }));
-    return [...s].sort();
-  }, [segments]);
-
-  const itemOptions = useMemo(() => {
-    const s = new Set();
-    segments.forEach(seg => seg.subsegments?.forEach(sub => {
-      if (filterPavement && sub.pavement_type !== filterPavement) return;
-      sub.partitions?.forEach(part => part.defects?.forEach(d => { if (d.item) s.add(d.item); }));
-    }));
-    return [...s].sort();
-  }, [segments, filterPavement]);
-
-  const severityOptions = useMemo(() => {
-    const s = new Set();
-    segments.forEach(seg => seg.subsegments?.forEach(sub => {
-      if (filterPavement && sub.pavement_type !== filterPavement) return;
-      sub.partitions?.forEach(part => part.defects?.forEach(d => {
-        if (filterItem && d.item !== filterItem) return;
-        if (d.severity) s.add(d.severity);
-      }));
-    }));
-    return [...s].sort();
-  }, [segments, filterPavement, filterItem]);
 
   function togglePartition(partId) {
     setExpandedPartitions((prev) => {
@@ -245,75 +220,66 @@ export default function InspectionFormPage() {
 
   const filteredSegments = useMemo(() => {
     if (!hasAnyFilter) return segments;
-    const term = searchTerm.toLowerCase().trim();
+    const fSeg     = filterSegment.toLowerCase().trim();
+    const fSub     = filterSubsegment.toLowerCase().trim();
+    const fPart    = filterPartition.toLowerCase().trim();
+    const fLane    = filterLaneNo.toLowerCase().trim();
+    const fJoint   = filterJoint.toLowerCase().trim();
+    const fItem    = filterItem.toLowerCase().trim();
+    const fSev     = filterSeverity.toLowerCase().trim();
+
+    const inc = (val, f) => !f || String(val ?? "").toLowerCase().includes(f);
 
     return segments.map((seg) => {
-      const segMatches = !term || seg.name?.toLowerCase().includes(term);
+      // Segment filter
+      const segMatches = inc(seg.name, fSeg) || inc(seg.segmentStart, fSeg) || inc(seg.segmentEnd, fSeg);
+      if (fSeg && !segMatches) return null;
 
       const filteredSubs = seg.subsegments.map((sub) => {
-        // Pavement filter is an exact match at the subsegment level
-        if (filterPavement && sub.pavement_type !== filterPavement) return null;
-
-        const subMatches = !term || (
-          String(sub.subsegment_no).includes(term) ||
-          sub.pavement_type?.toLowerCase().includes(term)
-        );
+        // Subsegment filter
+        if (fSub && !inc(sub.subsegment_no, fSub)) return null;
 
         const filteredParts = sub.partitions.reduce((acc, part) => {
-          const partTextMatches = !term || (
-            String(part.partition_no).includes(term) ||
-            part.item?.toLowerCase().includes(term) ||
-            part.severity?.toLowerCase().includes(term) ||
-            String(part.lane_no).toLowerCase().includes(term) ||
-            part.joint?.toLowerCase().includes(term)
-          );
+          // Partition filter
+          if (fPart && !inc(part.partition_no, fPart)) return acc;
 
           const filteredDefects = (part.defects || []).filter((d) => {
-            if (filterItem && d.item !== filterItem) return false;
-            if (filterSeverity && d.severity !== filterSeverity) return false;
-            if (!term) return true;
-            return (
-              d.image_filename?.toLowerCase().includes(term) ||
-              d.item?.toLowerCase().includes(term) ||
-              d.severity?.toLowerCase().includes(term) ||
-              d.remarks?.toLowerCase().includes(term) ||
-              String(d.lane_no).toLowerCase().includes(term) ||
-              d.joint?.toLowerCase().includes(term)
-            );
+            if (!inc(d.lane_no,  fLane))  return false;
+            if (!inc(d.joint,    fJoint)) return false;
+            if (!inc(d.item,     fItem))  return false;
+            if (!inc(d.severity, fSev))   return false;
+            return true;
           });
 
-          const hasDropdownFilter = filterItem || filterSeverity;
-          if (hasDropdownFilter) {
+          const hasDefectFilter = fLane || fJoint || fItem || fSev;
+          if (hasDefectFilter) {
             if (filteredDefects.length > 0) acc.push({ ...part, defects: filteredDefects });
-          } else if (partTextMatches || filteredDefects.length > 0) {
-            acc.push({
-              ...part,
-              defects: filteredDefects.length > 0 ? filteredDefects : partTextMatches ? part.defects : [],
-            });
+          } else {
+            acc.push(part);
           }
           return acc;
         }, []);
 
-        if (subMatches || filteredParts.length > 0) {
-          const noDefectFilter = !filterItem && !filterSeverity;
+        if (filteredParts.length > 0 || (!fPart && !fLane && !fJoint && !fItem && !fSev)) {
           return {
             ...sub,
-            partitions: filteredParts.length > 0 ? filteredParts : (subMatches && noDefectFilter ? sub.partitions : []),
+            partitions: filteredParts.length > 0 ? filteredParts : sub.partitions,
           };
         }
         return null;
       }).filter(Boolean);
 
-      if (segMatches || filteredSubs.length > 0) {
-        const noDropdownFilter = !filterPavement && !filterItem && !filterSeverity;
-        return {
-          ...seg,
-          subsegments: filteredSubs.length > 0 ? filteredSubs : (segMatches && noDropdownFilter ? seg.subsegments : []),
-        };
+      const filteredSubsClean = filteredSubs.filter(Boolean);
+      if (filteredSubsClean.length > 0) {
+        return { ...seg, subsegments: filteredSubsClean };
+      }
+      if (!fSeg && !fSub && !fPart && !fLane && !fJoint && !fItem && !fSev) {
+        return seg;
       }
       return null;
     }).filter(Boolean);
-  }, [segments, searchTerm, filterPavement, filterItem, filterSeverity, hasAnyFilter]);
+  }, [segments, filterSegment, filterSubsegment, filterPartition,
+      filterLaneNo, filterJoint, filterItem, filterSeverity, hasAnyFilter]);
 
   function buildRows() {
     const rows = [];
@@ -541,21 +507,6 @@ export default function InspectionFormPage() {
         </div>
 
         <div className="inspection-topbar-right">
-          <div className="inspection-search-wrapper">
-            <Search size={16} className="inspection-search-icon" />
-            <input
-              type="text"
-              placeholder="Search segment, partition, item, lane, joint, image..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="inspection-search-input"
-            />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm("")} className="inspection-search-clear">
-                <X size={16} />
-              </button>
-            )}
-          </div>
           <button className="inspection-btn inspection-btn-download" onClick={downloadCSV} disabled={loading || segments.length === 0} title="Download CSV">
             <Download size={15} /> CSV
           </button>
@@ -567,71 +518,33 @@ export default function InspectionFormPage() {
 
       {/* Filter bar */}
       <div className="inspection-filterbar">
-        <div className="inspection-filters">
-          <select
-            className="inspection-filter-select"
-            value={filterPavement}
-            onChange={(e) => { setFilterPavement(e.target.value); setFilterItem(""); setFilterSeverity(""); }}
-          >
-            <option value="">All Pavement Types</option>
-            {pavementOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-
-          <select
-            className="inspection-filter-select"
-            value={filterItem}
-            onChange={(e) => { setFilterItem(e.target.value); setFilterSeverity(""); }}
-            disabled={itemOptions.length === 0}
-          >
-            <option value="">All Items</option>
-            {itemOptions.map((i) => <option key={i} value={i}>{i}</option>)}
-          </select>
-
-          <select
-            className="inspection-filter-select"
-            value={filterSeverity}
-            onChange={(e) => setFilterSeverity(e.target.value)}
-            disabled={severityOptions.length === 0}
-          >
-            <option value="">All Severities</option>
-            {severityOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-
-          {hasAnyFilter && (
-            <button className="inspection-filter-clear" onClick={clearAllFilters}>
-              <X size={13} /> Clear all
-            </button>
-          )}
+        <div className="ifilter-label">FILTER</div>
+        <div className="ifilter-grid">
+          {[
+            { label: "SEGMENT",    value: filterSegment,    set: setFilterSegment,    placeholder: "e.g. K1512" },
+            { label: "SUBSEGMENT", value: filterSubsegment, set: setFilterSubsegment, placeholder: "e.g. 1" },
+            { label: "PARTITION",  value: filterPartition,  set: setFilterPartition,  placeholder: "e.g. 1" },
+            { label: "LANE NO.",   value: filterLaneNo,     set: setFilterLaneNo,     placeholder: "e.g. 1" },
+            { label: "JOINT",      value: filterJoint,      set: setFilterJoint,      placeholder: "e.g. Joint 1" },
+            { label: "ITEM",       value: filterItem,       set: setFilterItem,       placeholder: "e.g. Potholes" },
+            { label: "SEVERITY",   value: filterSeverity,   set: setFilterSeverity,   placeholder: "e.g. Slight" },
+          ].map(({ label, value, set, placeholder }) => (
+            <div key={label} className="ifilter-col">
+              <div className="ifilter-col-label">{label}</div>
+              <input
+                className="ifilter-input"
+                type="text"
+                placeholder={placeholder}
+                value={value}
+                onChange={(e) => set(e.target.value)}
+              />
+            </div>
+          ))}
         </div>
-
-        {/* Active filter chips */}
         {hasAnyFilter && (
-          <div className="inspection-active-chips">
-            {filterPavement && (
-              <span className="inspection-chip">
-                Pavement: <strong>{filterPavement}</strong>
-                <button onClick={() => { setFilterPavement(""); setFilterItem(""); setFilterSeverity(""); }}><X size={11} /></button>
-              </span>
-            )}
-            {filterItem && (
-              <span className="inspection-chip">
-                Item: <strong>{filterItem}</strong>
-                <button onClick={() => { setFilterItem(""); setFilterSeverity(""); }}><X size={11} /></button>
-              </span>
-            )}
-            {filterSeverity && (
-              <span className="inspection-chip">
-                Severity: <strong>{filterSeverity}</strong>
-                <button onClick={() => setFilterSeverity("")}><X size={11} /></button>
-              </span>
-            )}
-            {searchTerm.trim() && (
-              <span className="inspection-chip">
-                Search: <strong>"{searchTerm}"</strong>
-                <button onClick={() => setSearchTerm("")}><X size={11} /></button>
-              </span>
-            )}
-          </div>
+          <button className="inspection-filter-clear" onClick={clearAllFilters}>
+            <X size={13} /> Clear all
+          </button>
         )}
       </div>
 

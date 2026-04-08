@@ -2312,12 +2312,14 @@ body {
   position: relative;
   display: inline-block;
   transform-origin: 0 0;
+  pointer-events: none;
 }
 
 .eval-img {
   display: block;
   user-select: none;
-  pointer-events: auto;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
 
 .eval-overlay {
@@ -2407,9 +2409,26 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--primary-dark);
+  position: relative;
+  background-image: url("./pages/assets/backg4.gif");
+  background-size: cover;
+  background-position: center;
   color: var(--white);
   overflow: hidden;
+}
+
+.inspection-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 33, 61, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 0;
+}
+
+.inspection-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* Top bar */
@@ -2565,59 +2584,77 @@ body {
 
 /* Filter bar */
 .inspection-filterbar {
-  background: rgba(0,0,0,0.35);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  padding: 10px 24px;
+  background: rgba(10, 18, 42, 0.85);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  margin: 10px 24px;
+  padding: 14px 20px 16px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.inspection-filters {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
-.inspection-filter-select {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 7px;
+.ifilter-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent-orange);
+  margin-bottom: 2px;
+}
+
+.ifilter-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .ifilter-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .ifilter-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.ifilter-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ifilter-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.55);
+}
+
+.ifilter-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
   color: #fff;
   font-size: 13px;
-  padding: 6px 28px 6px 12px;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aaa' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  transition: border-color 0.2s, background 0.2s;
-  min-width: 160px;
+  padding: 7px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.18s, background 0.18s;
 }
 
-.inspection-filter-select:focus {
+.ifilter-input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+.ifilter-input:focus {
   outline: none;
   border-color: var(--accent-orange);
-  background-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.1);
 }
 
-.inspection-filter-select option {
-  background: #1a1a3a;
-  color: #fff;
-}
-
-.inspection-filter-select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Active filter state — highlight the select */
-.inspection-filter-select:not([value=""]):not(:disabled) {
+.ifilter-input:not(:placeholder-shown) {
   border-color: var(--accent-orange);
-  background-color: rgba(255, 169, 22, 0.12);
+  background: rgba(255,169,22,0.1);
 }
 
 .inspection-filter-clear {

@@ -169,7 +169,11 @@ export default function PartitionPage() {
         aiFolder: partition?.ai_folder || state?.aiFolder || "",
         partitionFolder: partition?.folder_path || "",
         partitionId: partition?.id,
+        partitionNo: partition?.partition_no ?? "",
         subsegmentId,
+        segmentId,
+        chainageId,
+        projectId,
         pavementType: state?.pavementType || "",
       },
     });
