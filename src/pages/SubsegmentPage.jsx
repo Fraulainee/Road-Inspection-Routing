@@ -66,6 +66,11 @@ export default function SubsegmentPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [projectName, setProjectName] = useState("");
+  const [chainageName, setChainageName] = useState("");
+  const [segmentName, setSegmentName] = useState("");
+  const [subsegmentNo, setSubsegmentNo] = useState("");
+
   const [imageFolder, setImageFolder] = useState("");
   const [aiFolder, setAiFolder] = useState("");
 
@@ -144,6 +149,22 @@ export default function SubsegmentPage() {
 
     setLoading(true);
     try {
+      const projects = await window.api.listProjects();
+      const foundProject = projects.find((p) => String(p.id) === String(projectId));
+      if (foundProject) setProjectName(foundProject.name);
+
+      const chainages = await window.api.listChainages(Number(projectId));
+      const foundChainage = chainages.find((c) => String(c.id) === String(chainageId));
+      if (foundChainage) setChainageName(foundChainage.name);
+
+      const segments = await window.api.listSegments(Number(chainageId));
+      const foundSegment = segments.find((s) => String(s.id) === String(segmentId));
+      if (foundSegment) setSegmentName(foundSegment.name);
+
+      const subsegments = await window.api.listSubsegments(Number(segmentId));
+      const foundSub = subsegments.find((s) => String(s.id) === String(subsegmentId));
+      if (foundSub) setSubsegmentNo(foundSub.subsegment_no ?? subsegmentId);
+
       const data = await window.api.listPartitions(Number(subsegmentId));
       const list = Array.isArray(data) ? data : [];
       setPartitions(list);
@@ -246,12 +267,16 @@ export default function SubsegmentPage() {
       alert("Please enter a valid start distance");
       return;
     }
-    if (!Number.isFinite(end) || end > 5) {
-      alert("End distance cannot exceed 5 m");
+    if (!Number.isFinite(end)) {
+      alert("Please enter a valid end distance");
       return;
     }
-    if (end <= start) {
-      alert("End distance must be greater than start distance");
+    if (partitionDist <= 0) {
+      alert("Partition distance cannot be zero or negative. End distance must be greater than start distance.");
+      return;
+    }
+    if (partitionDist > 5) {
+      alert("Partition distance (end − start) cannot exceed 5 m. Please re-enter the distances.");
       return;
     }
 
@@ -329,10 +354,27 @@ export default function SubsegmentPage() {
     <>
       <header className="header">
         <div className="header-left">
-          <h2>
-            <span className="project-label">Subsegment</span>{" "}
-            <span className="project-title">{subsegmentId}</span>
-          </h2>
+          <div className="header-breadcrumb">
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Project</span>
+              <span className="breadcrumb-value">{projectName || `#${projectId}`}</span>
+            </span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Chainage</span>
+              <span className="breadcrumb-value">{chainageName || `#${chainageId}`}</span>
+            </span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Segment</span>
+              <span className="breadcrumb-value">{segmentName || `#${segmentId}`}</span>
+            </span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Subsegment</span>
+              <span className="breadcrumb-value">{subsegmentNo || `#${subsegmentId}`}</span>
+            </span>
+          </div>
           <div className="stats-pills">
             <span className="stat-pill">Partitions: {partitions.length}</span>
           </div>
@@ -529,12 +571,13 @@ export default function SubsegmentPage() {
               A folder will be created inside the subsegment folder
             </p>
 
-            <div>
+            <div className="modal-field">
+              <label>No. of Partitions</label>
               <input
                 type="number"
                 min="1"
                 step="1"
-                placeholder="No. of Partitions (e.g. 3 → creates 1, 2, 3)"
+                placeholder="e.g., 3 → creates partitions 1, 2, 3"
                 value={draft.partitionNo}
                 onChange={(e) => {
                   const v = Math.floor(Math.abs(Number(e.target.value)));
@@ -545,39 +588,51 @@ export default function SubsegmentPage() {
               />
               <p className="modal-hint">Starts at 1 — entering 3 creates partitions 1, 2 and 3</p>
             </div>
-            <input
-              type="number"
-              placeholder="Start Distance (m)"
-              value={draft.start}
-              onChange={(e) => setDraft((p) => ({ ...p, start: e.target.value }))}
-              disabled={creating}
-            />
-            <div>
+            <div className="modal-field">
+              <label>Start Distance (m)</label>
               <input
                 type="number"
-                placeholder="End Distance (m) — max 5"
-                value={draft.end}
-                max={5}
-                onChange={(e) => {
-                  const v = Math.min(5, Number(e.target.value));
-                  setDraft((p) => ({ ...p, end: v || "" }));
-                }}
+                placeholder="e.g., 0"
+                value={draft.start}
+                onChange={(e) => setDraft((p) => ({ ...p, start: e.target.value }))}
                 disabled={creating}
               />
-              <p className="modal-hint">Maximum allowed: 5 m</p>
             </div>
-            <input
-              className="modal-input-calculated"
-              type="number"
-              placeholder="Partition Distance (m) — auto calculated"
-              value={
-                draft.end !== "" && draft.start !== ""
-                  ? parseFloat((Number(draft.end) - Number(draft.start)).toFixed(4))
-                  : ""
-              }
-              readOnly
-              disabled
-            />
+            <div className="modal-field">
+              <label>End Distance (m)</label>
+              <input
+                type="number"
+                placeholder="e.g., 10"
+                value={draft.end}
+                onChange={(e) => setDraft((p) => ({ ...p, end: e.target.value }))}
+                disabled={creating}
+              />
+            </div>
+            <div className="modal-field">
+              <label>Partition Distance (m) — auto calculated</label>
+              <input
+                className="modal-input-calculated"
+                type="number"
+                placeholder="—"
+                value={
+                  draft.end !== "" && draft.start !== ""
+                    ? parseFloat((Number(draft.end) - Number(draft.start)).toFixed(4))
+                    : ""
+                }
+                readOnly
+                disabled
+              />
+            </div>
+            {draft.end !== "" && draft.start !== "" && (Number(draft.end) - Number(draft.start)) <= 0 && (
+              <p style={{ color: '#e53e3e', fontSize: '13px', marginTop: '6px', fontWeight: 600 }}>
+                Partition distance cannot be zero or negative. End distance must be greater than start distance.
+              </p>
+            )}
+            {draft.end !== "" && draft.start !== "" && (Number(draft.end) - Number(draft.start)) > 5 && (
+              <p style={{ color: '#e53e3e', fontSize: '13px', marginTop: '6px', fontWeight: 600 }}>
+                Partition distance exceeds 5 m. Please re-enter the start and end distance.
+              </p>
+            )}
 
             <hr className="modal-divider" />
 
@@ -627,10 +682,18 @@ export default function SubsegmentPage() {
               <button className="btn-secondary" onClick={closeModal} disabled={creating}>
                 Cancel
               </button>
-              <button className="btn-primary" onClick={createPartition} disabled={creating}>
+              <button
+                className="btn-primary"
+                onClick={createPartition}
+                disabled={creating || (draft.end !== "" && draft.start !== "" && ((Number(draft.end) - Number(draft.start)) > 5 || (Number(draft.end) - Number(draft.start)) <= 0))}
+              >
                 {creating ? "Creating..." : "Create"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              All distances in meters (m) | Partition distance is auto-calculated | Max partition distance allowed: <strong>5 m</strong>
+            </p>
           </div>
         </div>
       )}

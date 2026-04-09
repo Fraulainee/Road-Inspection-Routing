@@ -83,13 +83,8 @@ export default function ReviewPage() {
         <div className="review-panels">
           {/* LEFT: AI output folder */}
           <div className="review-panel">
-            <div className="review-panel-label">
-              AI Folder
-              <span className="review-panel-sub">
-                {aiFolder ? aiFolder.split(/[\\/]/).pop() : "none"} · {aiImages.length} img{aiImages.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="review-topbar">
+            <div className="review-panel-header">
+              <span className="review-panel-title">AI Output</span>
               <div className="review-zooms">
                 <button className="icon-btn" onClick={() => setZoomLeft((z) => Math.min(3, +(z + 0.2).toFixed(2)))}>
                   <ZoomIn size={18} />
@@ -109,20 +104,15 @@ export default function ReviewPage() {
                   className="review-img"
                 />
               ) : (
-                <div className="review-empty">No AI image</div>
+                <div className="review-empty">No AI image detection</div>
               )}
             </div>
           </div>
 
           {/* RIGHT: raw image folder */}
           <div className="review-panel">
-            <div className="review-panel-label">
-              Image Folder
-              <span className="review-panel-sub">
-                {imageFolder ? imageFolder.split(/[\\/]/).pop() : "none"} · {images.length} img{images.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="review-topbar">
+            <div className="review-panel-header">
+              <span className="review-panel-title">Original</span>
               <div className="review-zooms">
                 <button className="icon-btn" onClick={() => setZoomRight((z) => Math.min(3, +(z + 0.2).toFixed(2)))}>
                   <ZoomIn size={18} />
@@ -142,7 +132,7 @@ export default function ReviewPage() {
                   className="review-img"
                 />
               ) : (
-                <div className="review-empty">No image</div>
+                <div className="review-empty">No image available</div>
               )}
             </div>
           </div>

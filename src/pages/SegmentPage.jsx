@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { RefreshCcw } from 'lucide-react';
 
@@ -23,6 +23,10 @@ export default function SegmentPage() {
   const [subsegments, setSubsegments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [projectName, setProjectName] = useState("");
+  const [chainageName, setChainageName] = useState("");
+  const [segmentName, setSegmentName] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [draft, setDraft] = useState({ 
@@ -67,10 +71,6 @@ export default function SegmentPage() {
     }
   }
 
-  // Segment title (you can enhance this later with real segment data)
-  const segmentTitle = useMemo(() => {
-    return `Segment #${segmentId}`;
-  }, [segmentId]);
 
   // Load subsegments
   async function refreshSubsegments() {
@@ -87,6 +87,18 @@ export default function SegmentPage() {
 
     setLoading(true);
     try {
+      const projects = await window.api.listProjects();
+      const foundProject = projects.find((p) => String(p.id) === String(projectId));
+      if (foundProject) setProjectName(foundProject.name);
+
+      const chainages = await window.api.listChainages(Number(projectId));
+      const foundChainage = chainages.find((c) => String(c.id) === String(chainageId));
+      if (foundChainage) setChainageName(foundChainage.name);
+
+      const segments = await window.api.listSegments(Number(chainageId));
+      const foundSegment = segments.find((s) => String(s.id) === String(segmentId));
+      if (foundSegment) setSegmentName(foundSegment.name);
+
       const data = await window.api.listSubsegments(Number(segmentId));
       setSubsegments(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -210,10 +222,22 @@ export default function SegmentPage() {
     <>
       <header className="header">
         <div className="header-left">
-          <h2>
-            <span className="project-label">Segment</span>{" "}
-            <span className="project-title">{segmentTitle}</span>
-          </h2>
+          <div className="header-breadcrumb">
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Project</span>
+              <span className="breadcrumb-value">{projectName || `#${projectId}`}</span>
+            </span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Chainage</span>
+              <span className="breadcrumb-value">{chainageName || `#${chainageId}`}</span>
+            </span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Segment</span>
+              <span className="breadcrumb-value">{segmentName || `#${segmentId}`}</span>
+            </span>
+          </div>
           <div className="stats-pills">
             <span className="stat-pill">Subsegments: {subsegments.length}</span>
           </div>
@@ -410,6 +434,10 @@ export default function SegmentPage() {
                 {editSaving ? "Saving..." : "Save"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Length in meters (m) | Lanes as a whole number (e.g., <strong>4</strong>)
+            </p>
           </div>
         </div>
       )}
@@ -460,6 +488,10 @@ export default function SegmentPage() {
                 {creating ? "Creating..." : "Create"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Length in meters (m) | Lanes as a whole number (e.g., <strong>4</strong>)
+            </p>
           </div>
         </div>
       )}

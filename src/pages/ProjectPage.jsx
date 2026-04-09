@@ -260,7 +260,7 @@ export default function ProjectPage({ projectsApi }) {
               type="text"
               placeholder="Enter chainage name (e.g., K1512)..."
               value={newChainageName}
-              onChange={(e) => setNewChainageName(e.target.value)}
+              onChange={(e) => setNewChainageName(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === "Enter" && handleCreateChainage()}
               autoFocus
               disabled={creating}
@@ -273,6 +273,10 @@ export default function ProjectPage({ projectsApi }) {
                 {creating ? "Creating..." : "Create"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Format: <strong>K</strong> followed by the kilometer number (e.g., <strong>K1512</strong>, <strong>K200</strong>)
+            </p>
           </div>
         </div>
       )}

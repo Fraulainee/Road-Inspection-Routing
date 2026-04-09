@@ -38,6 +38,7 @@ export default function ChainagePage() {
   const [error, setError] = useState("");
 
   const [chainageName, setChainageName] = useState("");
+  const [projectName, setProjectName] = useState("");
 
   // Local fallback / initial sample
   const sampleSegments = useMemo(
@@ -120,6 +121,11 @@ export default function ChainagePage() {
 
     setLoading(true);
     try {
+      // Load project name
+      const projects = await window.api.listProjects();
+      const foundProject = projects.find((p) => String(p.id) === String(projectId));
+      if (foundProject) setProjectName(foundProject.name);
+
       // Load the real chainage name
       const chainages = await window.api.listChainages(Number(projectId));
       const found = chainages.find((c) => String(c.id) === String(chainageId));
@@ -249,14 +255,20 @@ export default function ChainagePage() {
     <>
       <header className="header">
         <div className="header-left">
-          <h2>
-            <span className="project-label">Main Chainage</span>{" "}
-            <span className="project-title">{chainageName}</span>
-          </h2>
+          <div className="header-breadcrumb">
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Project</span>
+              <span className="breadcrumb-value">{projectName || `#${projectId}`}</span>
+            </span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-item">
+              <span className="breadcrumb-label">Chainage</span>
+              <span className="breadcrumb-value">{chainageName || `#${chainageId}`}</span>
+            </span>
+          </div>
 
           <div className="stats-pills">
             <span className="stat-pill">Segments: {segments.length}</span>
-            <span className="stat-pill">Project ID: {projectId}</span>
           </div>
         </div>
 
@@ -435,7 +447,7 @@ export default function ChainagePage() {
                 type="text"
                 placeholder="e.g., K1512 + (000)"
                 value={editSeg.segmentStart}
-                onChange={(e) => setEditSeg((p) => ({ ...p, segmentStart: e.target.value }))}
+                onChange={(e) => setEditSeg((p) => ({ ...p, segmentStart: e.target.value.toUpperCase() }))}
                 disabled={editSaving}
                 autoFocus
               />
@@ -446,7 +458,7 @@ export default function ChainagePage() {
                 type="text"
                 placeholder="e.g., K1512 + (135)"
                 value={editSeg.segmentEnd}
-                onChange={(e) => setEditSeg((p) => ({ ...p, segmentEnd: e.target.value }))}
+                onChange={(e) => setEditSeg((p) => ({ ...p, segmentEnd: e.target.value.toUpperCase() }))}
                 disabled={editSaving}
               />
             </div>
@@ -469,6 +481,10 @@ export default function ChainagePage() {
                 {editSaving ? "Saving..." : "Save"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Station format: <strong>K[km] + ([m])</strong> — e.g., <strong>K1512 + (000)</strong>
+            </p>
           </div>
         </div>
       )}
@@ -482,43 +498,58 @@ export default function ChainagePage() {
               A folder will be created inside the chainage folder
             </p>
 
-            <input
-              type="text"
-              placeholder="Segment Name (e.g., K1512-03)"
-              value={newSeg.segmentId}
-              onChange={(e) => setNewSeg((p) => ({ ...p, segmentId: e.target.value }))}
-              disabled={creating}
-              autoFocus
-            />
-            <input
-              type="text"
-              placeholder="Segment Sub Name (e.g., K1512 + (000) + K1512 + (135))"
-              value={newSeg.segmentSubName}
-              onChange={(e) => setNewSeg((p) => ({ ...p, segmentSubName: e.target.value }))}
-              disabled={creating}
-            />
-            <input
-              type="text"
-              placeholder="Start (e.g., K1512 + (000))"
-              value={newSeg.segmentStart}
-              onChange={(e) => setNewSeg((p) => ({ ...p, segmentStart: e.target.value }))}
-              disabled={creating}
-            />
-            <input
-              type="text"
-              placeholder="End (e.g., K1512 + (135))"
-              value={newSeg.segmentEnd}
-              onChange={(e) => setNewSeg((p) => ({ ...p, segmentEnd: e.target.value }))}
-              disabled={creating}
-            />
-            <input
-              type="number"
-              placeholder="Segment Length (m)"
-              value={newSeg.length}
-              onChange={(e) => setNewSeg((p) => ({ ...p, length: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateSegment()}
-              disabled={creating}
-            />
+            <div className="modal-field">
+              <label>Segment Name</label>
+              <input
+                type="text"
+                placeholder="e.g., K1512-03"
+                value={newSeg.segmentId}
+                onChange={(e) => setNewSeg((p) => ({ ...p, segmentId: e.target.value.toUpperCase() }))}
+                disabled={creating}
+                autoFocus
+              />
+            </div>
+            <div className="modal-field">
+              <label>Segment Sub Name</label>
+              <input
+                type="text"
+                placeholder="e.g., K1512 + (000) + K1512 + (135)"
+                value={newSeg.segmentSubName}
+                onChange={(e) => setNewSeg((p) => ({ ...p, segmentSubName: e.target.value.toUpperCase() }))}
+                disabled={creating}
+              />
+            </div>
+            <div className="modal-field">
+              <label>Start Station</label>
+              <input
+                type="text"
+                placeholder="e.g., K1512 + (000)"
+                value={newSeg.segmentStart}
+                onChange={(e) => setNewSeg((p) => ({ ...p, segmentStart: e.target.value.toUpperCase() }))}
+                disabled={creating}
+              />
+            </div>
+            <div className="modal-field">
+              <label>End Station</label>
+              <input
+                type="text"
+                placeholder="e.g., K1512 + (135)"
+                value={newSeg.segmentEnd}
+                onChange={(e) => setNewSeg((p) => ({ ...p, segmentEnd: e.target.value.toUpperCase() }))}
+                disabled={creating}
+              />
+            </div>
+            <div className="modal-field">
+              <label>Segment Length (m)</label>
+              <input
+                type="number"
+                placeholder="e.g., 135"
+                value={newSeg.length}
+                onChange={(e) => setNewSeg((p) => ({ ...p, length: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateSegment()}
+                disabled={creating}
+              />
+            </div>
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={closeModal} disabled={creating}>
@@ -528,6 +559,10 @@ export default function ChainagePage() {
                 {creating ? "Creating..." : "Create"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Segment Name: <strong>K[km]-[seq]</strong> (e.g., <strong>K1512-03</strong>) <br /> Segment Sub Name: Start <strong>K[km] + ([m]) + </strong> End <strong>K[km] + ([m])</strong> (e.g., <strong>K1512 + (000) + K1512 + (135))</strong> <br /> Station format: <strong>K[km] + ([m])</strong> (e.g., <strong>K1512 + (000)</strong>)
+            </p>
           </div>
         </div>
       )}

@@ -105,6 +105,15 @@ export default function PartitionPage() {
       return;
     }
 
+    if (Number(editData.partition_m) <= 0) {
+      alert("Partition distance cannot be zero or negative. End distance must be greater than start distance.");
+      return;
+    }
+    if (Number(editData.partition_m) > 5) {
+      alert("Partition distance (end − start) cannot exceed 5 m. Please re-enter the distances.");
+      return;
+    }
+
     setSaving(true);
     try {
       const updated = await window.api.updatePartition({
@@ -296,7 +305,13 @@ export default function PartitionPage() {
                   <input
                     type="number"
                     value={editData.start_m}
-                    onChange={(e) => setEditData({ ...editData, start_m: e.target.value })}
+                    onChange={(e) => {
+                      const start = e.target.value;
+                      const dist = editData.end_m !== "" && start !== ""
+                        ? parseFloat((Number(editData.end_m) - Number(start)).toFixed(4))
+                        : "";
+                      setEditData({ ...editData, start_m: start, partition_m: dist });
+                    }}
                   />
                 </div>
 
@@ -305,17 +320,35 @@ export default function PartitionPage() {
                   <input
                     type="number"
                     value={editData.end_m}
-                    onChange={(e) => setEditData({ ...editData, end_m: e.target.value })}
+                    onChange={(e) => {
+                      const end = e.target.value;
+                      const dist = editData.start_m !== "" && end !== ""
+                        ? parseFloat((Number(end) - Number(editData.start_m)).toFixed(4))
+                        : "";
+                      setEditData({ ...editData, end_m: end, partition_m: dist });
+                    }}
                   />
                 </div>
 
                 <div className="edit-item">
-                  <label>Partition Distance (m)</label>
+                  <label>Partition Distance (m) — auto calculated</label>
                   <input
                     type="number"
                     value={editData.partition_m}
-                    onChange={(e) => setEditData({ ...editData, partition_m: e.target.value })}
+                    readOnly
+                    disabled
+                    style={{ opacity: 0.7, cursor: 'not-allowed' }}
                   />
+                  {editData.partition_m !== "" && Number(editData.partition_m) <= 0 && (
+                    <p style={{ color: '#e53e3e', fontSize: '13px', marginTop: '6px', fontWeight: 600 }}>
+                      Partition distance cannot be zero or negative. End distance must be greater than start distance.
+                    </p>
+                  )}
+                  {editData.partition_m !== "" && Number(editData.partition_m) > 5 && (
+                    <p style={{ color: '#e53e3e', fontSize: '13px', marginTop: '6px', fontWeight: 600 }}>
+                      Partition distance exceeds 5 m. Please re-enter the start and end distance.
+                    </p>
+                  )}
                 </div>
 
               </div>
@@ -359,7 +392,11 @@ export default function PartitionPage() {
                   <X size={18} />
                   Cancel
                 </button>
-                <button className="btn-primary" onClick={handleSave} disabled={saving}>
+                <button
+                  className="btn-primary"
+                  onClick={handleSave}
+                  disabled={saving || Number(editData.partition_m) > 5 || Number(editData.partition_m) <= 0}
+                >
                   <Save size={18} />
                   {saving ? "Saving..." : "Save Changes"}
                 </button>

@@ -301,7 +301,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., R-001"
                     value={editProject.roadId}
-                    onChange={(e) => setEditProject((p) => ({ ...p, roadId: e.target.value }))}
+                    onChange={(e) => setEditProject((p) => ({ ...p, roadId: e.target.value.toUpperCase() }))}
                     disabled={editSaving}
                   />
                 </div>
@@ -311,7 +311,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., National Highway"
                     value={editProject.roadName}
-                    onChange={(e) => setEditProject((p) => ({ ...p, roadName: e.target.value }))}
+                    onChange={(e) => setEditProject((p) => ({ ...p, roadName: e.target.value.toUpperCase() }))}
                     disabled={editSaving}
                     autoFocus
                   />
@@ -322,7 +322,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., 1st District"
                     value={editProject.district}
-                    onChange={(e) => setEditProject((p) => ({ ...p, district: e.target.value }))}
+                    onChange={(e) => setEditProject((p) => ({ ...p, district: e.target.value.toUpperCase() }))}
                     disabled={editSaving}
                   />
                 </div>
@@ -332,7 +332,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., Region III"
                     value={editProject.region}
-                    onChange={(e) => setEditProject((p) => ({ ...p, region: e.target.value }))}
+                    onChange={(e) => setEditProject((p) => ({ ...p, region: e.target.value.toUpperCase() }))}
                     disabled={editSaving}
                   />
                 </div>
@@ -346,7 +346,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., S-001"
                     value={editProject.sectionId}
-                    onChange={(e) => setEditProject((p) => ({ ...p, sectionId: e.target.value }))}
+                    onChange={(e) => setEditProject((p) => ({ ...p, sectionId: e.target.value.toUpperCase() }))}
                     disabled={editSaving}
                   />
                 </div>
@@ -369,7 +369,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="Full name"
                     value={editProject.surveyorName}
-                    onChange={(e) => setEditProject((p) => ({ ...p, surveyorName: e.target.value }))}
+                    onChange={(e) => setEditProject((p) => ({ ...p, surveyorName: e.target.value.toUpperCase() }))}
                     disabled={editSaving}
                   />
                 </div>
@@ -400,6 +400,10 @@ export default function ProjectsPage() {
                 {editSaving ? "Saving..." : "Save"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Road ID: <strong>R-[number]</strong> (e.g., R-001) | Section ID: <strong>S-[number]</strong> (e.g., S-001) | Section Length in meters
+            </p>
           </div>
         </div>
       )}
@@ -419,7 +423,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., R-001"
                     value={newProject.roadId}
-                    onChange={(e) => setNP("roadId", e.target.value)}
+                    onChange={(e) => setNP("roadId", e.target.value.toUpperCase())}
                     disabled={creating}
                   />
                 </div>
@@ -429,7 +433,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., National Highway"
                     value={newProject.roadName}
-                    onChange={(e) => setNP("roadName", e.target.value)}
+                    onChange={(e) => setNP("roadName", e.target.value.toUpperCase())}
                     disabled={creating}
                     autoFocus
                   />
@@ -440,7 +444,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., 1st District"
                     value={newProject.district}
-                    onChange={(e) => setNP("district", e.target.value)}
+                    onChange={(e) => setNP("district", e.target.value.toUpperCase())}
                     disabled={creating}
                   />
                 </div>
@@ -450,7 +454,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., Region III"
                     value={newProject.region}
-                    onChange={(e) => setNP("region", e.target.value)}
+                    onChange={(e) => setNP("region", e.target.value.toUpperCase())}
                     disabled={creating}
                   />
                 </div>
@@ -464,7 +468,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="e.g., S-001"
                     value={newProject.sectionId}
-                    onChange={(e) => setNP("sectionId", e.target.value)}
+                    onChange={(e) => setNP("sectionId", e.target.value.toUpperCase())}
                     disabled={creating}
                   />
                 </div>
@@ -487,7 +491,7 @@ export default function ProjectsPage() {
                     type="text"
                     placeholder="Full name"
                     value={newProject.surveyorName}
-                    onChange={(e) => setNP("surveyorName", e.target.value)}
+                    onChange={(e) => setNP("surveyorName", e.target.value.toUpperCase())}
                     disabled={creating}
                   />
                 </div>
@@ -520,6 +524,10 @@ export default function ProjectsPage() {
                 {creating ? "Creating..." : "Confirm"}
               </button>
             </div>
+            <hr style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '12px 0' }} />
+            <p style={{ fontSize: '12px', color: '#888', margin: 0 }}>
+              Road ID: <strong>R-[number]</strong> (e.g., R-001) | Section ID: <strong>S-[number]</strong> (e.g., S-001) | Section Length in meters
+            </p>
           </div>
         </div>
       )}
