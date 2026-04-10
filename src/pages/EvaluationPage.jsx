@@ -727,7 +727,7 @@ export default function EvaluationPage() {
                     onClick={() => { setMode((m) => m === "annotate" ? "idle" : "annotate"); resetMeasure(); }}
                   >
                     <Pencil size={16} />
-                    Draw Box
+                    Annotate
                   </button>
                   <button
                     className="tool-btn ghost"
@@ -794,9 +794,9 @@ export default function EvaluationPage() {
               </div>
 
               {/* Scale */}
-              <div className="tool-card">
+              <div className="tool-card" style={{ gridColumn: 2 }}>
                 <span className="tool-card-label">Scale</span>
-                <div className="tool-card-btns" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                <div className="tool-card-btns" style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
                   <div className="meter-row">
                     <label>Meter/px:</label>
                     <input
@@ -808,10 +808,8 @@ export default function EvaluationPage() {
                       onChange={(e) => setField("meterPerPx", e.target.value)}
                     />
                   </div>
-                  <div className="meter-totals" style={{ alignItems: "flex-start", marginTop: 0 }}>
-                    <div className="eval-total-label eval-total-big eval-total-highlight">
-                      Total: {Number.isFinite(totalM) ? totalM.toFixed(3) : "—"} m
-                    </div>
+                  <div className="eval-total-label eval-total-big eval-total-highlight" style={{ marginLeft: 8, whiteSpace: "nowrap" }}>
+                    Total: {Number.isFinite(totalM) ? totalM.toFixed(3) : "—"} m
                   </div>
                 </div>
               </div>
