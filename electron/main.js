@@ -34,6 +34,14 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
+
+  win.webContents.on("did-finish-load", () => {
+    win.webContents.focus();
+  });
+
+  win.on("focus", () => {
+    win.webContents.focus();
+  });
 }
 
 // Folder pickers

@@ -31,6 +31,7 @@ function makeDefect(d) {
   return {
     id: d.id,
     image_filename: d.image_filename ?? "",
+    screenshot_path: d.screenshot_path ?? "",
     lane_no: d.lane_no ?? "",
     joint: d.joint ?? "",
     item: d.item ?? "",
@@ -62,6 +63,8 @@ export default function InspectionFormPage() {
   const { projectId, chainageId, segmentId } = useParams();
 
   const [segments, setSegments] = useState([]);
+  const [projectName, setProjectName] = useState("");
+  const [chainageName, setChainageName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filterSegment,    setFilterSegment]    = useState("");
@@ -71,7 +74,10 @@ export default function InspectionFormPage() {
   const [filterJoint,      setFilterJoint]      = useState("");
   const [filterItem,       setFilterItem]       = useState("");
   const [filterSeverity,   setFilterSeverity]   = useState("");
+  const [expandedSubsegments, setExpandedSubsegments] = useState(new Set());
   const [expandedPartitions, setExpandedPartitions] = useState(new Set());
+  const [selectedDefectKey, setSelectedDefectKey] = useState(null);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const hasAnyFilter = filterSegment || filterSubsegment ||
     filterPartition || filterLaneNo || filterJoint || filterItem || filterSeverity;
@@ -86,8 +92,8 @@ export default function InspectionFormPage() {
       "Segment Name", "Segment Start", "Segment End", "Segment Length (m)",
       "Subsegment No.", "Subsegment Length (m)", "Lanes", "Pavement Type",
       "Partition No.", "Partition Start (m)", "Partition End (m)", "Partition Distance (m)", "Distress No.",
-      "#", "Image", "Lane No.", "Joint", "Item", "Severity",
-      "Length (m)", "Width (m)", "Depth (mm)", "Area (m²)", "Remarks",
+      "#", "Lane No.", "Joint", "Item", "Severity",
+      "Length (m)", "Width (m)", "Depth (mm)", "Area (m²)", "Remarks", "Image Path",
     ];
 
     const esc = (v) => {
@@ -96,6 +102,14 @@ export default function InspectionFormPage() {
         ? `"${s.replace(/"/g, '""')}"`
         : s;
     };
+
+    const makeHyperlink = (filePath, displayName) => {
+      if (!filePath) return "";
+      const normalized = filePath.replace(/\\/g, "/");
+      return `=HYPERLINK("file:///${normalized}","${displayName || filePath.split(/[\\/]/).pop()}")`;
+    };
+
+    const sanitize = (s) => String(s ?? "").replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 
     const rows = [headers.map(esc).join(",")];
 
@@ -111,26 +125,43 @@ export default function InspectionFormPage() {
             rows.push([...segCols, ...subCols, ...partCols, "", "", "", "", "", "", "", "", "", "", ""].map(esc).join(","));
           } else {
             defects.forEach((d, i) => {
+              const imageLinkCell = makeHyperlink(d.screenshot_path, d.image_filename);
               rows.push([
-                ...segCols, ...subCols, ...partCols,
-                i + 1, d.image_filename, d.lane_no, d.joint, d.item, d.severity,
-                d.length_m, d.width_m, d.depth_mm, d.area_m2, d.remarks,
-              ].map(esc).join(","));
+                ...segCols.map(esc), ...subCols.map(esc), ...partCols.map(esc),
+                esc(i + 1), esc(d.lane_no), esc(d.joint), esc(d.item), esc(d.severity),
+                esc(d.length_m), esc(d.width_m), esc(d.depth_mm), esc(d.area_m2), esc(d.remarks),
+                imageLinkCell,
+              ].join(","));
             });
           }
         }
       }
     }
 
+    const date = new Date().toISOString().slice(0, 10);
+    const segName  = sanitize(filteredSegments[0]?.name ?? `seg${segmentId}`);
+    const subNos   = filteredSegments[0]?.subsegments.map((s) => s.subsegment_no).join("-") ?? "";
+    const subPart  = subNos ? `_${sanitize(subNos)}` : "";
+    const filename = `roadinspection_${sanitize(projectName)}_${sanitize(chainageName)}_${segName}${subPart}_${date}.csv`;
+
     const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `inspection_segment${segmentId}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   }
 
+
+  function toggleSubsegment(subId) {
+    setExpandedSubsegments((prev) => {
+      const next = new Set(prev);
+      if (next.has(subId)) next.delete(subId);
+      else next.add(subId);
+      return next;
+    });
+  }
 
   function togglePartition(partId) {
     setExpandedPartitions((prev) => {
@@ -146,6 +177,8 @@ export default function InspectionFormPage() {
     setError("");
 
     if (!isElectron()) {
+      setProjectName("DemoProject");
+      setChainageName("K1512");
       setSegments([
         {
           id: 1,
@@ -168,7 +201,15 @@ export default function InspectionFormPage() {
     }
 
     try {
-      const allSegments = await window.api.listSegments(Number(chainageId));
+      const [allProjects, allChainages, allSegments] = await Promise.all([
+        window.api.listProjects(),
+        window.api.listChainages(Number(projectId)),
+        window.api.listSegments(Number(chainageId)),
+      ]);
+      const proj = allProjects.find((p) => String(p.id) === String(projectId));
+      const ch   = allChainages.find((c) => String(c.id) === String(chainageId));
+      setProjectName(proj?.name ?? `project${projectId}`);
+      setChainageName(ch?.name  ?? `chainage${chainageId}`);
       const matchedSegments = allSegments.filter((s) => String(s.id) === String(segmentId));
 
       const segmentsWithData = await Promise.all(
@@ -201,7 +242,9 @@ export default function InspectionFormPage() {
       );
 
       setSegments(segmentsWithData);
-      // Auto-expand all partitions
+      // Auto-expand all subsegments and partitions
+      const allSubIds = segmentsWithData.flatMap((seg) => seg.subsegments.map((s) => s.id));
+      setExpandedSubsegments(new Set(allSubIds));
       const allPartitionIds = segmentsWithData.flatMap((seg) =>
         seg.subsegments.flatMap((sub) => sub.partitions.map((p) => p.id))
       );
@@ -344,11 +387,15 @@ export default function InspectionFormPage() {
         const subDefects = sub.partitions.reduce((n, p) => n + (p.defects?.length || 0), 0);
 
         // Subsegment header
+        const isSubExpanded = expandedSubsegments.has(sub.id);
         rows.push(
-          <tr key={`sub-${sub.id}`}>
+          <tr key={`sub-${sub.id}`} className="inspection-group-subsegment-row" onClick={() => toggleSubsegment(sub.id)} style={{ cursor: "pointer" }}>
             <td colSpan={TOTAL_COLS} className="inspection-group-subsegment">
               <div className="igroup-sub-inner">
                 <div className="igroup-sub-title">
+                  <span className="igroup-subseg-chevron">
+                    {isSubExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </span>
                   <span className="igroup-badge sub-badge">SUBSEGMENT</span>
                   <span className="igroup-name">#{sub.subsegment_no}</span>
                 </div>
@@ -384,6 +431,8 @@ export default function InspectionFormPage() {
             </td>
           </tr>
         );
+
+        if (!isSubExpanded) continue;
 
         if (sub.partitions.length === 0) {
           rows.push(
@@ -449,12 +498,11 @@ export default function InspectionFormPage() {
           );
 
           // Defect rows
-          if (isExpanded) {
+          if (isExpanded && defects.length > 0) {
             // Per-partition column header
             rows.push(
               <tr key={`part-${part.id}-header`} className="inspection-defect-header">
                 <th className="inspection-th inspection-th-defect">#</th>
-                <th className="inspection-th inspection-th-defect">Image</th>
                 <th className="inspection-th inspection-th-defect">Lane No.</th>
                 <th className="inspection-th inspection-th-defect">Joint</th>
                 <th className="inspection-th inspection-th-defect">Item</th>
@@ -463,15 +511,20 @@ export default function InspectionFormPage() {
                 <th className="inspection-th inspection-th-defect">Width (m)</th>
                 <th className="inspection-th inspection-th-defect">Depth (mm)</th>
                 <th className="inspection-th inspection-th-defect">Area (m²)</th>
+                <th className="inspection-th inspection-th-defect">Image</th>
                 <th className="inspection-th inspection-th-defect">Remarks</th>
               </tr>
             );
 
             defects.forEach((defect, idx) => {
+              const defectKey = `${part.id}-${defect.id}-${idx}`;
               rows.push(
-                <tr key={`defect-${defect.id}-${idx}`} className="inspection-defect-row">
+                <tr
+                  key={`defect-${defect.id}-${idx}`}
+                  className={`inspection-defect-row${selectedDefectKey === defectKey ? " is-selected" : ""}`}
+                  onClick={() => setSelectedDefectKey(prev => prev === defectKey ? null : defectKey)}
+                >
                   <td className="inspection-td inspection-td-defect inspection-defect-index">#{idx + 1}</td>
-                  <td className="inspection-td inspection-td-defect">{defect.image_filename || "—"}</td>
                   <td className="inspection-td inspection-td-defect">{defect.lane_no !== "" ? defect.lane_no : "—"}</td>
                   <td className="inspection-td inspection-td-defect">{defect.joint || "—"}</td>
                   <td className="inspection-td inspection-td-defect">{defect.item || "—"}</td>
@@ -480,6 +533,18 @@ export default function InspectionFormPage() {
                   <td className="inspection-td inspection-td-defect">{defect.width_m !== "" ? defect.width_m : "—"}</td>
                   <td className="inspection-td inspection-td-defect">{defect.depth_mm !== "" ? defect.depth_mm : "—"}</td>
                   <td className="inspection-td inspection-td-defect">{defect.area_m2 !== "" ? defect.area_m2 : "—"}</td>
+                  <td className="inspection-td inspection-td-defect inspection-td-image">
+                    {defect.screenshot_path ? (
+                      <img
+                        className="inspection-defect-thumb"
+                        src={`local://${encodeURIComponent(defect.screenshot_path)}`}
+                        alt={defect.image_filename}
+                        onClick={(e) => { e.stopPropagation(); setLightboxSrc(`local://${encodeURIComponent(defect.screenshot_path)}`); }}
+                      />
+                    ) : (
+                      defect.image_filename || "—"
+                    )}
+                  </td>
                   <td className="inspection-td inspection-td-defect">{defect.remarks || "—"}</td>
                 </tr>
               );
@@ -493,13 +558,11 @@ export default function InspectionFormPage() {
   }
 
   return (
+    <>
     <div className="inspection-page">
       {/* Top bar */}
       <div className="inspection-topbar">
         <div className="inspection-topbar-left">
-          <button className="inspection-btn" onClick={() => navigate(`/projects/${projectId}/chainage/${chainageId}`)}>
-            <ArrowLeft size={16} /> Back to Chainage
-          </button>
           <div>
             <div className="inspection-title">Inspection Form</div>
             <div className="inspection-subtitle">Chainage {chainageId} — Project {projectId}</div>
@@ -507,6 +570,9 @@ export default function InspectionFormPage() {
         </div>
 
         <div className="inspection-topbar-right">
+          <button className="inspection-btn" onClick={() => navigate(`/projects/${projectId}/chainage/${chainageId}`)}>
+            <ArrowLeft size={16} /> Back to Chainage
+          </button>
           <button className="inspection-btn inspection-btn-download" onClick={downloadCSV} disabled={loading || segments.length === 0} title="Download CSV">
             <Download size={15} /> CSV
           </button>
@@ -573,5 +639,18 @@ export default function InspectionFormPage() {
         )}
       </div>
     </div>
+
+    {lightboxSrc && (
+      <div className="inspection-lightbox" onClick={() => setLightboxSrc(null)}>
+        <img
+          className="inspection-lightbox-img"
+          src={lightboxSrc}
+          alt="Screenshot"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <button className="inspection-lightbox-close" onClick={() => setLightboxSrc(null)}>✕</button>
+      </div>
+    )}
+    </>
   );
 }

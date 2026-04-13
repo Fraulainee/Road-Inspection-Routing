@@ -29,7 +29,7 @@ function ScreenshotThumb({ path: filePath }) {
       src={src}
       alt="screenshot"
       onClick={() => isElectron() && window.api.openFile(filePath)}
-      style={{ width: 90, height: 56, objectFit: "cover", borderRadius: 4, display: "block", cursor: "zoom-in" }}
+      style={{ width: 180, height: 120, objectFit: "cover", borderRadius: 6, display: "block", cursor: "zoom-in" }}
       title="Click to open full image"
     />
   );
@@ -39,6 +39,7 @@ export default function SubsegmentPage() {
   const { projectId, chainageId, segmentId, subsegmentId } = useParams();
   const navigate = useNavigate();
   const [selectedRowId, setSelectedRowId] = useState(null);
+  const [selectedDefectKey, setSelectedDefectKey] = useState(null);
 
   const tableWrapRef = useRef(null);
   const topScrollRef = useRef(null);
@@ -528,9 +529,13 @@ export default function SubsegmentPage() {
                       <td colSpan={16}>No evaluations recorded for this partition.</td>
                     </tr>
                   ] : defects.map((d, idx) => (
-                    <tr key={`${r.id}-defect-${d.id}`} className="partition-defect-row">
+                    <tr
+                      key={`${r.id}-defect-${d.id}`}
+                      className={`partition-defect-row${selectedDefectKey === `${r.id}-${d.id}` ? " defect-row-selected" : ""}`}
+                      onClick={() => setSelectedDefectKey(prev => prev === `${r.id}-${d.id}` ? null : `${r.id}-${d.id}`)}
+                    >
                       <td className="partition-defect-index">#{idx + 1}</td>
-                      <td colSpan={3}>{d.image_filename || "—"}</td>
+                      <td colSpan={3}></td>
                       <td>{/* distress no */}</td>
                       <td>{d.lane_no || "—"}</td>
                       <td>{d.joint || "—"}</td>
@@ -637,7 +642,7 @@ export default function SubsegmentPage() {
             <hr className="modal-divider" />
 
             <div className="modal-section">
-              <label className="modal-label">Target Image Folder (Optional)</label>
+              <label className="modal-label">Target Image Folder</label>
               <div className="folder-row">
                 <input
                   className="folder-input"
